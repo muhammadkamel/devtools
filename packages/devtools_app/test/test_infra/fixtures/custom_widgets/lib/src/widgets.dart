@@ -6,10 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 
 class CustomApp extends StatelessWidget {
-  const CustomApp({
-    super.key,
-    required this.home,
-  });
+  const CustomApp({super.key, required this.home});
 
   final Widget home;
 
@@ -53,48 +50,42 @@ class CustomContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     // ignore: avoid-wrapping-in-padding, for testing purposes.
     return Padding(
-        padding: padding ?? EdgeInsets.zero,
-        child: Container(
-          width: width,
-          height: height,
-          margin: margin,
-          decoration: decoration,
-          color: color,
-          child: child,
-        ));
+      padding: padding ?? EdgeInsets.zero,
+      child: Container(
+        width: width,
+        height: height,
+        margin: margin,
+        decoration: decoration,
+        color: color,
+        child: child,
+      ),
+    );
   }
 }
 
 class CustomCenter extends Align {
-  const CustomCenter(
-      {super.key, super.widthFactor, super.heightFactor, super.child});
+  const CustomCenter({
+    super.key,
+    super.widthFactor,
+    super.heightFactor,
+    super.child,
+  });
 }
 
 class CustomText extends StatelessWidget {
-  const CustomText(
-    this.data, {
-    super.key,
-    this.style,
-  });
+  const CustomText(this.data, {super.key, this.style});
 
   final String data;
   final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      data,
-      style: style,
-    );
+    return Text(data, style: style);
   }
 }
 
 class CustomButton extends StatefulWidget {
-  const CustomButton({
-    super.key,
-    required this.onPressed,
-    required this.child,
-  });
+  const CustomButton({super.key, required this.onPressed, required this.child});
 
   final VoidCallback? onPressed;
   final Widget child;

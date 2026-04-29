@@ -42,6 +42,14 @@ import 'inspector_tree_controller.dart';
 
 final _log = Logger('inspector_controller');
 
+// ignore: do_not_use_environment, used for ad-hoc inspector loading debugging.
+const _kInspectorDbgEnabled = true;
+void _dbg(String msg) {
+  if (!_kInspectorDbgEnabled) return;
+  // ignore: avoid_print
+  debugPrint('[INSPECTOR-DBG ${DateTime.now().toIso8601String()}] ctrl: $msg');
+}
+
 /// Data pattern containing the properties and render properties for a widget
 /// tree node.
 typedef WidgetTreeNodeProperties = ({
@@ -61,11 +69,13 @@ class InspectorController extends DisposableController
     with AutoDisposeControllerMixin
     implements InspectorServiceClient {
   InspectorController({required this.inspectorTree, required this.treeType}) {
+    _dbg('ctor called, scheduling init()');
     unawaited(init());
   }
 
   @override
   Future<void> init() async {
+    _dbg('init() entry');
     super.init();
     _refreshRateLimiter = RateLimiter(refreshFramesPerSecond, refresh);
 
@@ -75,7 +85,12 @@ class InspectorController extends DisposableController
       onExpand: _onExpand,
       onClientActiveChange: _onClientChange,
     );
+    _dbg('init() awaiting onServiceAvailable...');
     await serviceConnection.serviceManager.onServiceAvailable;
+    _dbg(
+      'init() onServiceAvailable resolved, '
+      'inspectorService=${serviceConnection.inspectorService.runtimeType}',
+    );
 
     if (inspectorService is InspectorService) {
       _treeGroups = InspectorObjectGroupManager(
@@ -97,11 +112,19 @@ class InspectorController extends DisposableController
       () {
         final newIsolate =
             serviceConnection.serviceManager.isolateManager.mainIsolate.value;
-        if (_mainIsolate == newIsolate) return;
+        _dbg(
+          'mainIsolate listener: old=${_mainIsolate?.id} new=${newIsolate?.id}',
+        );
+        if (_mainIsolate == newIsolate) {
+          _dbg('  -> isolate unchanged, returning');
+          return;
+        }
         // First deactivate the current widget tree.
+        _dbg('  -> deactivating tree');
         setActivate(false);
         if (newIsolate != null) {
           // Then reactivate it with the new isolate.
+          _dbg('  -> reactivating tree with new isolate');
           setActivate(true);
         }
         _mainIsolate = newIsolate;
@@ -124,13 +147,20 @@ class InspectorController extends DisposableController
     });
 
     addAutoDisposeListener(serviceConnection.serviceManager.connectedState, () {
-      if (serviceConnection.serviceManager.connectedState.value.connected) {
+      final connected =
+          serviceConnection.serviceManager.connectedState.value.connected;
+      _dbg('connectedState listener fired, connected=$connected');
+      if (connected) {
         _handleConnectionStart();
       } else {
         _handleConnectionStop();
       }
     });
 
+    _dbg(
+      'init(): connectedAppInitialized='
+      '${serviceConnection.serviceManager.connectedAppInitialized}',
+    );
     if (serviceConnection.serviceManager.connectedAppInitialized) {
       _handleConnectionStart();
     }
@@ -150,6 +180,7 @@ class InspectorController extends DisposableController
   }
 
   void _handleConnectionStart() {
+    _dbg('_handleConnectionStart()');
     // Clear any existing badge/errors for older errors that were collected.
     // Do this in a post frame callback so that we are not trying to clear the
     // error notifiers for this screen while the framework is already in the
@@ -163,6 +194,7 @@ class InspectorController extends DisposableController
   }
 
   void _handleConnectionStop() {
+    _dbg('_handleConnectionStop()');
     setActivate(false);
     dispose();
   }
@@ -175,17 +207,25 @@ class InspectorController extends DisposableController
       .hasServiceExtension(extensions.toggleSelectWidgetMode.extension);
 
   Future<void> _onClientChange(bool added) async {
+    _dbg(
+      '_onClientChange(added=$added) before, clientCount=$_clientCount '
+      'visibleToUser=$visibleToUser isActive=$isActive',
+    );
     if (!added && _clientCount == 0) {
       // Don't try to remove clients if there are none
+      _dbg('  -> early return (remove with 0 clients)');
       return;
     }
 
     _clientCount += added ? 1 : -1;
     assert(_clientCount >= 0);
+    _dbg('  -> clientCount now=$_clientCount');
     if (_clientCount == 1) {
+      _dbg('  -> first client, setVisibleToUser(true) + setActivate(true)');
       await setVisibleToUser(true);
       setActivate(true);
     } else if (_clientCount == 0) {
+      _dbg('  -> last client gone, setVisibleToUser(false)');
       await setVisibleToUser(false);
     }
   }
@@ -281,14 +321,21 @@ class InspectorController extends DisposableController
   }
 
   Future<void> setVisibleToUser(bool visible) async {
+    _dbg(
+      'setVisibleToUser($visible) current=$visibleToUser '
+      'flutterAppFrameReady=$flutterAppFrameReady isActive=$isActive',
+    );
     if (visibleToUser == visible) {
+      _dbg('  -> no change, returning');
       return;
     }
     visibleToUser = visible;
 
     if (visibleToUser) {
+      _dbg('  -> visible=true, calling refreshInspector()');
       await refreshInspector();
     } else {
+      _dbg('  -> visible=false, calling shutdownTree(false)');
       shutdownTree(false);
     }
   }
@@ -365,6 +412,7 @@ class InspectorController extends DisposableController
   }
 
   void onIsolateStopped() {
+    _dbg('onIsolateStopped()');
     flutterAppFrameReady = false;
     treeLoadStarted = false;
     shutdownTree(true);
@@ -372,8 +420,13 @@ class InspectorController extends DisposableController
 
   @override
   Future<void> onForceRefresh() async {
+    _dbg(
+      'onForceRefresh() visibleToUser=$visibleToUser disposed=$disposed '
+      'flutterAppFrameReady=$flutterAppFrameReady',
+    );
     assert(!disposed);
     if (!visibleToUser || disposed) {
+      _dbg('  -> early return (not visible or disposed)');
       return;
     }
     await _recomputeTreeRoot(null);
@@ -387,6 +440,10 @@ class InspectorController extends DisposableController
   }
 
   Future<void> refreshInspector({bool isManualRefresh = false}) async {
+    _dbg(
+      'refreshInspector(isManualRefresh=$isManualRefresh) '
+      'firstLoadCompleted=$firstInspectorTreeLoadCompleted',
+    );
     // If the user is manually refreshing the inspector before the first load
     // has completed, this could indicate a slow load time or that the inspector
     // failed to load the tree once available.
@@ -404,6 +461,18 @@ class InspectorController extends DisposableController
     await onForceRefresh();
   }
 
+  /// Whether the inspector tree currently has no real content.
+  ///
+  /// After `shutdownTree()` (called on isolate stop), `inspectorTree.root` is
+  /// reset to a placeholder node with no children. A successfully loaded tree
+  /// always has at least one child (the root widget). Used to detect the
+  /// post-hot-restart state where readiness probes succeeded but the tree was
+  /// never repopulated.
+  bool _treeIsEmpty() {
+    final root = inspectorTree.root;
+    return root == null || root.children.isEmpty;
+  }
+
   void filterErrors() {
     serviceConnection.errorBadgeManager.filterErrors(
       InspectorScreen.id,
@@ -412,41 +481,90 @@ class InspectorController extends DisposableController
   }
 
   void setActivate(bool enabled) {
+    _dbg(
+      'setActivate($enabled) was isActive=$isActive '
+      'visibleToUser=$visibleToUser flutterAppFrameReady=$flutterAppFrameReady',
+    );
     if (!enabled) {
+      _dbg('  -> deactivating: onIsolateStopped + isActive=false');
       onIsolateStopped();
       isActive = false;
       return;
     }
     if (isActive) {
+      _dbg('  -> already active, returning');
       // Already activated.
       return;
     }
 
     isActive = true;
+    _dbg('  -> activating: addClient + maybeLoadUI()');
     inspectorService.addClient(this);
     unawaited(maybeLoadUI());
   }
 
   Future<void> maybeLoadUI() async {
+    _dbg(
+      'maybeLoadUI() entry visibleToUser=$visibleToUser isActive=$isActive '
+      'flutterAppFrameReady=$flutterAppFrameReady disposed=$disposed',
+    );
     if (!visibleToUser || !isActive) {
+      _dbg('  -> early return (not visible or not active)');
       return;
     }
 
     if (flutterAppFrameReady) {
-      if (disposed) return;
+      if (disposed) {
+        _dbg('  -> disposed before update, returning');
+        return;
+      }
       // We need to start by querying the inspector service to find out the
       // current state of the UI.
       final inspectorRef = DevToolsQueryParams.load().inspectorRef;
+      _dbg(
+        '  -> frameReady=true, calling updateSelectionFromService '
+        '(inspectorRef=$inspectorRef)',
+      );
       await updateSelectionFromService(inspectorRef: inspectorRef);
+      _dbg('  -> updateSelectionFromService returned');
+
+      // After a hot-restart, `updateSelectionFromService` can silently fail
+      // (the new isolate's eval throws while the binding is still
+      // initialising) and never reach `applyNewSelection`, leaving the tree
+      // empty. If we know the device is ready but the tree is still empty,
+      // recompute it directly. The setter only triggers one rebuild, so
+      // there's no extra UI cost on the healthy path where the tree is
+      // already populated.
+      if (!disposed && _treeIsEmpty()) {
+        _dbg('  -> tree still empty after selection update, recomputing root');
+        await _recomputeTreeRoot(null);
+      }
     } else {
-      if (disposed) return;
+      if (disposed) {
+        _dbg('  -> disposed before isWidgetTreeReady, returning');
+        return;
+      }
       if (inspectorService is InspectorService) {
+        _dbg('  -> frameReady=false, querying isWidgetTreeReady()...');
         final widgetTreeReady = await (inspectorService as InspectorService)
             .isWidgetTreeReady();
+        _dbg('  -> isWidgetTreeReady() returned $widgetTreeReady');
         flutterAppFrameReady = widgetTreeReady;
+      } else {
+        _dbg(
+          '  -> inspectorService is NOT InspectorService '
+          '(${inspectorService.runtimeType}), cannot query readiness',
+        );
       }
       if (isActive && flutterAppFrameReady) {
+        _dbg('  -> recursing into maybeLoadUI() now that frameReady=true');
         await maybeLoadUI();
+      } else {
+        _dbg(
+          '  -> NOT recursing: isActive=$isActive '
+          'flutterAppFrameReady=$flutterAppFrameReady '
+          '(waiting for onFlutterFrame to retry)',
+        );
       }
     }
   }
@@ -485,22 +603,33 @@ class InspectorController extends DisposableController
     RemoteDiagnosticsNode? newSelection, {
     bool? hideImplementationWidgets,
   }) async {
+    _dbg(
+      '_recomputeTreeRoot() disposed=$disposed '
+      'treeGroups=${_treeGroups != null}',
+    );
     assert(!disposed);
     hideImplementationWidgets ??= _implementationWidgetsHidden.value;
     final treeGroups = _treeGroups;
     if (disposed || treeGroups == null) {
+      _dbg('  -> early return (disposed or no treeGroups)');
       return;
     }
 
     treeGroups.cancelNext();
     try {
       final group = treeGroups.next;
+      _dbg('  -> calling group.getRoot()...');
       final node = await group.getRoot(
         treeType,
         isSummaryTree: hideImplementationWidgets,
         includeFullDetails: false,
       );
+      _dbg(
+        '  -> getRoot returned node=${node == null ? "null" : "non-null"} '
+        'groupDisposed=${group.disposed} ctrlDisposed=$disposed',
+      );
       if (node == null || group.disposed || disposed) {
+        _dbg('  -> bailing (null or disposed)');
         return;
       }
       // TODO(jacobr): as a performance optimization we should check if the
@@ -514,6 +643,7 @@ class InspectorController extends DisposableController
         node,
         expandChildren: true,
       );
+      _dbg('  -> setting inspectorTree.root');
       inspectorTree.root = rootNode;
       final selectedNode = _determineNewSelection(
         newSelection ?? selectedDiagnostic,
@@ -707,13 +837,19 @@ class InspectorController extends DisposableController
 
   @override
   void onFlutterFrame() {
+    _dbg(
+      'onFlutterFrame() visibleToUser=$visibleToUser '
+      'treeLoadStarted=$treeLoadStarted isActive=$isActive',
+    );
     flutterAppFrameReady = true;
     if (!visibleToUser) {
+      _dbg('  -> not visible, returning (frameReady is now true though)');
       return;
     }
 
     if (!treeLoadStarted) {
       treeLoadStarted = true;
+      _dbg('  -> first frame after visible: maybeLoadUI()');
       // This was the first frame.
       unawaited(maybeLoadUI());
     }

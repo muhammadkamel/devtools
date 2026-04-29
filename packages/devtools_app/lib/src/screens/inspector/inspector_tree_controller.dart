@@ -33,6 +33,13 @@ import 'inspector_controller.dart';
 
 final _log = Logger('inspector_tree_controller');
 
+const _kInspectorDbgEnabled = true;
+void _dbg(String msg) {
+  if (!_kInspectorDbgEnabled) return;
+  // ignore: avoid_print
+  debugPrint('[INSPECTOR-DBG ${DateTime.now().toIso8601String()}] tree: $msg');
+}
+
 /// Presents a [InspectorTreeNode].
 class _InspectorTreeRowWidget extends StatefulWidget {
   /// Constructs a [_InspectorTreeRowWidget] that presents a line in the
@@ -150,6 +157,10 @@ class InspectorTreeController extends DisposableController
   void addClient(InspectorControllerClient value) {
     final firstClient = _clients.isEmpty;
     _clients.add(value);
+    _dbg(
+      'TreeController.addClient firstClient=$firstClient '
+      'totalClients=${_clients.length}',
+    );
     if (firstClient) {
       config.onClientActiveChange?.call(true);
     }
@@ -157,6 +168,7 @@ class InspectorTreeController extends DisposableController
 
   void removeClient(InspectorControllerClient value) {
     _clients.remove(value);
+    _dbg('TreeController.removeClient totalClients=${_clients.length}');
     if (_clients.isEmpty) {
       config.onClientActiveChange?.call(false);
     }
@@ -172,10 +184,15 @@ class InspectorTreeController extends DisposableController
   InspectorTreeNode? _root;
 
   set root(InspectorTreeNode? node) {
+    _dbg(
+      'set root: node=${node == null ? "null" : "non-null"} '
+      'children=${node?.children.length ?? 0}',
+    );
     if (node != null) {
       _updateRows(node: node, updateSearchableRows: true);
     }
     _root = node;
+    _dbg('set root: rowsInTree.length=${_rowsInTree.value.length}');
 
     ga.select(
       gac.inspector,
@@ -1126,6 +1143,7 @@ class _InspectorTreeState extends State<InspectorTree>
   }
 
   void _bindToController() {
+    _dbg('_bindToController: addClient');
     treeController?.addClient(this);
   }
 
@@ -1134,6 +1152,7 @@ class _InspectorTreeState extends State<InspectorTree>
     super.build(context);
     final treeControllerLocal = treeController;
     if (treeControllerLocal == null) {
+      _dbg('build: treeController == null -> spinner');
       // Indicate the tree is loading.
       return const CenteredCircularProgressIndicator();
     }
@@ -1144,11 +1163,19 @@ class _InspectorTreeState extends State<InspectorTree>
         // Note: The inspector rows contain only the fake root node when the
         // inspector tree is shutdown.
         if (rows.length <= 1) {
+          _dbg(
+            'build: rows.length=${rows.length} -> spinner '
+            '(firstLoad=${controller.firstInspectorTreeLoadCompleted} '
+            'visibleToUser=${controller.visibleToUser} '
+            'isActive=${controller.isActive} '
+            'flutterAppFrameReady=${controller.flutterAppFrameReady})',
+          );
           // This works around a bug when Scrollbars are present on a short lived
           // widget.
           return const SizedBox(child: CenteredCircularProgressIndicator());
         }
 
+        _dbg('build: rows.length=${rows.length} -> rendering tree');
         if (!controller.firstInspectorTreeLoadCompleted) {
           final screenId = widget.screenId;
           if (screenId != null) {

@@ -34,6 +34,13 @@ import 'primitives/source_location.dart';
 const _inspectorLibraryUri =
     'package:flutter/src/widgets/widget_inspector.dart';
 
+const _kInspectorDbgEnabled = true;
+void _dbg(String msg) {
+  if (!_kInspectorDbgEnabled) return;
+  // ignore: avoid_print
+  debugPrint('[INSPECTOR-DBG ${DateTime.now().toIso8601String()}] svc: $msg');
+}
+
 abstract class InspectorServiceBase extends DisposableController
     with AutoDisposeControllerMixin {
   InspectorServiceBase({
@@ -101,10 +108,12 @@ abstract class InspectorServiceBase extends DisposableController
 
   void addClient(InspectorServiceClient client) {
     clients.add(client);
+    _dbg('addClient(${client.runtimeType}) total=${clients.length}');
   }
 
   void removeClient(InspectorServiceClient client) {
     clients.remove(client);
+    _dbg('removeClient(${client.runtimeType}) total=${clients.length}');
   }
 
   /// Returns whether to use the Daemon API or the VM Service protocol directly.
@@ -194,6 +203,7 @@ class InspectorService extends InspectorServiceBase {
         evalIsolate:
             serviceConnection.serviceManager.isolateManager.mainIsolate,
       ) {
+    _dbg('InspectorService ctor: subscribing to onExtensionEvent');
     // Note: We do not need to listen to event history here because the
     // inspector uses a separate API to get the current inspector selection.
     autoDisposeStreamSubscription(
@@ -254,6 +264,10 @@ class InspectorService extends InspectorServiceBase {
 
   void onExtensionVmServiceReceived(Event e) {
     if (e.extensionKind == FlutterEvent.frame) {
+      _dbg(
+        'onExtensionVmServiceReceived(Flutter.Frame) '
+        'dispatching to ${clients.length} clients',
+      );
       for (final client in clients) {
         try {
           client.onFlutterFrame();
@@ -459,10 +473,13 @@ class InspectorService extends InspectorServiceBase {
   /// Flutter.Frame event before attempting to display the widget tree. If the
   /// application is ready, the next Flutter.Frame event may never come as no
   /// new frames will be triggered to draw unless something changes in the UI.
-  Future<bool> isWidgetTreeReady() {
-    return invokeBoolServiceMethodNoArgs(
+  Future<bool> isWidgetTreeReady() async {
+    _dbg('isWidgetTreeReady() requesting...');
+    final result = await invokeBoolServiceMethodNoArgs(
       WidgetInspectorServiceExtensions.isWidgetTreeReady.name,
     );
+    _dbg('isWidgetTreeReady() -> $result');
+    return result;
   }
 
   Future<bool> isWidgetCreationTracked() {

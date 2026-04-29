@@ -40,9 +40,7 @@ class _ExampleWidgetState extends State<ExampleWidget> {
       children: <Widget>[
         TextField(
           controller: _controller,
-          decoration: const InputDecoration(
-            hintText: 'Type something',
-          ),
+          decoration: const InputDecoration(hintText: 'Type something'),
         ),
         ElevatedButton(
           onPressed: () {

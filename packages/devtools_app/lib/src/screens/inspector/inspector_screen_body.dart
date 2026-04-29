@@ -25,6 +25,13 @@ import 'inspector_screen.dart';
 import 'inspector_tree_controller.dart';
 import 'widget_details.dart';
 
+const _kInspectorDbgEnabled = true;
+void _dbg(String msg) {
+  if (!_kInspectorDbgEnabled) return;
+  // ignore: avoid_print
+  debugPrint('[INSPECTOR-DBG ${DateTime.now().toIso8601String()}] body: $msg');
+}
+
 class InspectorScreenBody extends StatefulWidget {
   const InspectorScreenBody({super.key, required this.controller});
 
@@ -58,14 +65,22 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
   @override
   void initState() {
     super.initState();
+    _dbg('initState');
     ga.screen(InspectorScreen.id);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _dbg(
+      'didChangeDependencies '
+      'inspectorService=${serviceConnection.inspectorService.runtimeType} '
+      'connected=${serviceConnection.serviceManager.connectedState.value.connected} '
+      'firstLoadCompleted=${controller.firstInspectorTreeLoadCompleted}',
+    );
 
     if (serviceConnection.inspectorService == null) {
+      _dbg('  -> inspectorService is null, app may not be Flutter, returning');
       // The app must not be a Flutter app.
       return;
     }
@@ -100,6 +115,7 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
     });
 
     if (!controller.firstInspectorTreeLoadCompleted) {
+      _dbg('  -> firstLoad not completed, ga.timeStart(pageReady)');
       ga.timeStart(InspectorScreen.id, gac.pageReady);
     }
 

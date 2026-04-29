@@ -31,16 +31,10 @@ class MyApp extends StatelessWidget {
     PeriodicAction(incrementCounter).doEvery(const Duration(seconds: 1));
     return MaterialApp(
       title: 'Hello, World',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Hello, World'),
-        ),
-        body: const Center(
-          child: Text('Hello, World!'),
-        ),
+        appBar: AppBar(title: const Text('Hello, World')),
+        body: const Center(child: Text('Hello, World!')),
         floatingActionButton: FloatingActionButton(
           onPressed: _printHello,
           tooltip: 'Say hi',

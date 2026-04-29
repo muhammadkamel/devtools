@@ -16,9 +16,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
@@ -37,9 +35,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
+      appBar: AppBar(title: Text(widget.title)),
       body: Center(
         child: Card(
           child: Column(
@@ -69,14 +65,9 @@ class _MyHomePageState extends State<MyHomePage> {
     navigateCallbacks[title] = navigateToDemo;
     return Row(
       children: <Widget>[
-        const SizedBox(
-          width: 50.0,
-        ),
+        const SizedBox(width: 50.0),
         const Icon(Icons.star),
-        TextButton(
-          onPressed: navigateToDemo,
-          child: Text(title),
-        ),
+        TextButton(onPressed: navigateToDemo, child: Text(title)),
       ],
     );
   }
