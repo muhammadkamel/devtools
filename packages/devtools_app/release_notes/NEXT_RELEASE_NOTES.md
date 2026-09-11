@@ -28,7 +28,9 @@ To learn more about DevTools, check out the
 
 ## Performance updates
 
-TODO: Remove this section if there are not any updates.
+* Fixed a bug where the Flutter frames chart could appear frozen after
+  switching away from the Performance screen and coming back.
+  [#9960](https://github.com/flutter/devtools/pull/9960)
 
 ## CPU profiler updates
 
